@@ -1,228 +1,224 @@
-import React, { useState } from 'react';
-import type { MotivoPermiso, SolicitudPermiso } from '../types';
+import React, { useState, useEffect } from 'react';
+import type { SolicitudPermiso, TrabajadorNomina } from '../types';
 
 interface Props {
   onAgregarSolicitud: (solicitud: Omit<SolicitudPermiso, 'id'>) => void;
+  nominaPersonal: TrabajadorNomina[];
 }
 
-export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud }) => {
+export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaPersonal }) => {
   const [nombreTrabajador, setNombreTrabajador] = useState('');
   const [rut, setRut] = useState('');
-  const [jefeSeccion, setJefeSeccion] = useState('');
-  const [motivo, setMotivo] = useState<MotivoPermiso>('Particulares');
-  const [tipoTiempo, setTipoTiempo] = useState<'Dias' | 'Horas'>('Horas');
-  const [dias, setDias] = useState<number>(0.5);
-  const [fechaDesde, setFechaDesde] = useState('');
-  const [fechaHasta, setFechaHasta] = useState('');
+  const [motivo, setMotivo] = useState('Particulares');
+  const [tipoPermiso, setTipoPermiso] = useState<'Por Horas' | 'Por Dias'>('Por Horas');
+  const [cantidadHoras, setCantidadHoras] = useState('0,5');
   const [horaSalida, setHoraSalida] = useState('');
-  const [horaLlegada, setHoraLlegada] = useState('');
+  const [horaRegreso, setHoraRegreso] = useState('');
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
+  const [jefeSeccion, setJefeSeccion] = useState('');
   const [observaciones, setObservaciones] = useState('');
+
+  // Efecto "BUSCARV" para autocompletar el RUT al seleccionar el nombre de la nómina
+  useEffect(() => {
+    if (!nombreTrabajador) {
+      setRut('');
+      return;
+    }
+    const encontrado = nominaPersonal.find(t => t.nombre.toUpperCase() === nombreTrabajador.toUpperCase());
+    if (encontrado) {
+      setRut(encontrado.rut);
+    } else {
+      setRut('');
+    }
+  }, [nombreTrabajador, nominaPersonal]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validar coherencia estricta de horas si el tipo de solicitud es "Horas"
-    if (tipoTiempo === 'Horas' && horaSalida && horaLlegada) {
-      const [salidaHora, salidaMin] = horaSalida.split(':').map(Number);
-      const [llegadaHora, llegarMin] = horaLlegada.split(':').map(Number);
-
-      const totalMinutosSalida = salidaHora * 60 + salidaMin;
-      const totalMinutosLlegada = llegadaHora * 60 + llegarMin;
-      const diferenciaMinutos = totalMinutosLlegada - totalMinutosSalida;
-
-      if (diferenciaMinutos <= 0) {
-        alert('Error: La hora de llegada debe ser posterior a la hora de salida.');
-        return;
-      }
-
-      const horasCalculadas = diferenciaMinutos / 60;
-      const horasSolicitadas = Number(dias);
-
-      // Validación estricta: la diferencia horaria debe coincidir exactamente con lo solicitado
-      if (horasCalculadas !== horasSolicitadas) {
-        alert(
-          `Error de coherencia: El rango horario seleccionado (${horasCalculadas} hrs) no coincide con la cantidad de horas solicitadas (${horasSolicitadas} hrs). Deben ser exactamente iguales.`
-        );
-        return;
-      }
+    if (!nombreTrabajador || !rut) {
+      alert('Por favor seleccione un trabajador válido.');
+      return;
     }
 
-    const nuevaSolicitud = {
-      fechaSolicitud: new Date().toISOString().split('T')[0],
-      nombreTrabajador,
+    onAgregarSolicitud({
+      nombreTrabajador: nombreTrabajador.toUpperCase(),
       rut,
-      jefeSeccion,
-      motivo,
-      tipoTiempo,
-      fechaDesde,
-      fechaHasta,
-      dias: Number(dias),
-      ...(tipoTiempo === 'Horas' && { horaSalida, horaLlegada }),
-      observaciones,
-      estado: 'En espera' as const,
-    };
-
-    onAgregarSolicitud(nuevaSolicitud);
-
-    // Mensaje de éxito institucional
-    alert(`¡Solicitud enviada con éxito!\n\nSe ha registrado correctamente el permiso para ${nombreTrabajador}. Queda en estado "En espera" para su revisión.`);
+      cargo: jefeSeccion,
+      tipoPermiso: tipoPermiso === 'Por Horas' ? 'Administrativo' : 'Otro',
+      fechaInicio: fechaInicio || new Date().toISOString().split('T')[0],
+      cantidadHoras: Number(cantidadHoras.replace(',', '.')) || 8.5,
+      motivo: `${motivo} - ${observaciones}`.trim(),
+      estado: 'Pendiente'
+    });
 
     // Limpiar formulario
     setNombreTrabajador('');
     setRut('');
-    setJefeSeccion('');
-    setFechaDesde('');
-    setFechaHasta('');
-    setHoraSalida('');
-    setHoraLlegada('');
-    setDias(0.5);
     setObservaciones('');
+    alert('¡Solicitud enviada con éxito!');
   };
 
   return (
-    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-md space-y-6">
-      <h2 className="text-xl font-bold text-slate-800 border-b pb-2">Formulario de Solicitud de Permiso</h2>
+    <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl shadow-md space-y-6 border border-slate-200">
+      <h2 className="text-xl font-bold text-slate-800 border-b pb-3">Formulario de Solicitud de Permiso</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Trabajador</label>
-          <input
-            type="text"
-            value={nombreTrabajador}
-            onChange={(e) => setNombreTrabajador(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Ej. Juan Pérez"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">RUT</label>
-          <input
-            type="text"
-            value={rut}
-            onChange={(e) => setRut(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Ej. 12.345.678-9"
-          />
+      {/* SECCIÓN 1: DATOS DEL TRABAJADOR */}
+      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider">1. Datos del Trabajador</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Trabajador (Nómina)</label>
+            <select
+              value={nombreTrabajador}
+              onChange={(e) => setNombreTrabajador(e.target.value)}
+              required
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">-- Seleccione un trabajador --</option>
+              {nominaPersonal.map((t) => (
+                <option key={t.id} value={t.nombre}>
+                  {t.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">RUT</label>
+            <input
+              type="text"
+              value={rut}
+              readOnly
+              placeholder="Se autocompleta con la nómina"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-100 text-slate-500 focus:outline-none"
+            />
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Motivo</label>
-          <select
-            value={motivo}
-            onChange={(e) => setMotivo(e.target.value as MotivoPermiso)}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="Particulares">Particulares</option>
-            <option value="Consolidado">Consolidado</option>
-            <option value="Permiso Médico">Permiso Médico</option>
-            <option value="Fallecimiento">Fallecimiento</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Solicitud</label>
-          <select
-            value={tipoTiempo}
-            onChange={(e) => setTipoTiempo(e.target.value as 'Dias' | 'Horas')}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="Dias">Por Días</option>
-            <option value="Horas">Por Horas</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">
-            Cantidad ({tipoTiempo === 'Horas' ? 'Horas' : 'Días'})
-          </label>
-          <input
-            type="number"
-            step="0.5"
-            min="0.5"
-            value={dias}
-            onChange={(e) => setDias(parseFloat(e.target.value) || 0)}
-            required
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      {/* SECCIÓN 2: MOTIVO Y TIPO */}
+      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider">2. Motivo y Tipo de Solicitud</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Motivo</label>
+            <select
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Particulares">Particulares</option>
+              <option value="Administrativo">Administrativo</option>
+              <option value="Médico">Médico</option>
+              <option value="Gremial">Gremial</option>
+              <option value="Asuntos Familiares">Asuntos Familiares</option>
+              <option value="Conciliación">Conciliación</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Tipo de Solicitud</label>
+            <select
+              value={tipoPermiso}
+              onChange={(e) => setTipoPermiso(e.target.value as any)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="Por Horas">Por Horas</option>
+              <option value="Por Dias">Por Días</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {tipoTiempo === 'Horas' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+      {/* SECCIÓN 3: TIEMPOS Y HORARIOS */}
+      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider">3. Tiempos y Horarios</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Cantidad (Horas)</label>
+            <input
+              type="text"
+              value={cantidadHoras}
+              onChange={(e) => setCantidadHoras(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Hora de Salida</label>
             <input
               type="time"
               value={horaSalida}
               onChange={(e) => setHoraSalida(e.target.value)}
-              required={tipoTiempo === 'Horas'}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Hora de Regreso / Llegada</label>
             <input
               type="time"
-              value={horaLlegada}
-              onChange={(e) => setHoraLlegada(e.target.value)}
-              required={tipoTiempo === 'Horas'}
+              value={horaRegreso}
+              onChange={(e) => setHoraRegreso(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
         </div>
-      )}
+      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Desde (Fecha)</label>
-          <input
-            type="date"
-            value={fechaDesde}
-            onChange={(e) => setFechaDesde(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+      {/* SECCIÓN 4: FECHAS Y OBSERVACIONES */}
+      <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider">4. Fechas y Autorización</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Desde (Fecha)</label>
+            <input
+              type="date"
+              value={fechaInicio}
+              onChange={(e) => setFechaInicio(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Hasta (Fecha)</label>
+            <input
+              type="date"
+              value={fechaFin}
+              onChange={(e) => setFechaFin(e.target.value)}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Jefe de Sección</label>
+            <input
+              type="text"
+              value={jefeSeccion}
+              onChange={(e) => setJefeSeccion(e.target.value)}
+              placeholder="Ej. Dr. Javier Pérez"
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
         </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Hasta (Fecha)</label>
-          <input
-            type="date"
-            value={fechaHasta}
-            onChange={(e) => setFechaHasta(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Jefe de Sección</label>
-          <input
-            type="text"
-            value={jefeSeccion}
-            onChange={(e) => setJefeSeccion(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Ej. Dr. Javier Pérez"
+
+        <div className="pt-2">
+          <label className="block text-sm font-medium text-slate-700 mb-1">Observaciones</label>
+          <textarea
+            rows={2}
+            value={observaciones}
+            onChange={(e) => setObservaciones(e.target.value)}
+            placeholder="Detalles adicionales del permiso..."
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium text-slate-700 mb-1">Observaciones</label>
-        <textarea
-          rows={3}
-          value={observaciones}
-          onChange={(e) => setObservaciones(e.target.value)}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder="Detalles adicionales del permiso..."
-        />
-      </div>
-
-      <div className="flex justify-end">
+      <div className="flex justify-end pt-2">
         <button
           type="submit"
-          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition shadow"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-2.5 rounded-lg text-sm transition shadow cursor-pointer"
         >
           Enviar Solicitud
         </button>

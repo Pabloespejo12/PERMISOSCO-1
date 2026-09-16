@@ -18,3 +18,9 @@ export interface SolicitudPermiso {
   observaciones: string;
   estado: EstadoPermiso;
 }
+export interface TrabajadorNomina {
+  id: string;
+  nombre: string;
+  rut: string;
+  cargo: string;
+}
