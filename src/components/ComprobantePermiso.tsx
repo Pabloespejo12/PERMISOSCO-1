@@ -15,7 +15,7 @@ export const ComprobantePermiso: React.FC<Props> = ({ solicitud, onCerrar }) => 
     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 relative space-y-6 max-h-[90vh] overflow-y-auto print:shadow-none print:p-0 print:m-0 print:w-full print:max-h-none print:overflow-visible">
         
-        {/* Botones de acción (No se imprimen) - Asegurados con z-index y posición fija relativa al contenedor */}
+        {/* Botones de acción (No se imprimen) */}
         <div className="sticky top-0 bg-white/95 backdrop-blur z-20 flex justify-between items-center print:hidden border-b pb-4 pt-1">
           <h3 className="text-lg font-bold text-slate-800">Comprobante Oficial - Centro Odontológico</h3>
           <div className="flex items-center gap-2">
@@ -46,7 +46,6 @@ export const ComprobantePermiso: React.FC<Props> = ({ solicitud, onCerrar }) => 
               <p className="text-xs text-slate-600">Codelco Chile - Calama</p>
             </div>
             <div className="text-right text-xs text-slate-500">
-              <p><strong>Fecha Emisión:</strong> {solicitud.fechaSolicitud}</p>
               <p><strong>Folio ID:</strong> #{solicitud.id}</p>
             </div>
           </div>
@@ -67,7 +66,7 @@ export const ComprobantePermiso: React.FC<Props> = ({ solicitud, onCerrar }) => 
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 uppercase">Jefe de Sección (Aprobador)</span>
-              <span className="font-medium text-indigo-700">{solicitud.jefeSeccion || 'No especificado'}</span>
+              <span className="font-medium text-indigo-700">{solicitud.cargo || 'No especificado'}</span>
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 uppercase">Motivo</span>
@@ -75,44 +74,36 @@ export const ComprobantePermiso: React.FC<Props> = ({ solicitud, onCerrar }) => 
             </div>
           </div>
 
-          {/* Fechas y Duración */}
+          {/* Fechas y Tipo */}
           <div className="grid grid-cols-3 gap-4 text-sm bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
             <div>
-              <span className="block text-xs font-semibold text-slate-500 uppercase">Tipo Tiempo</span>
-              <span className="font-medium text-slate-800">{solicitud.tipoTiempo}</span>
+              <span className="block text-xs font-semibold text-slate-500 uppercase">Tipo de Permiso</span>
+              <span className="font-medium text-slate-800">{solicitud.tipoPermiso}</span>
             </div>
             <div>
-              <span className="block text-xs font-semibold text-slate-500 uppercase">Desde</span>
-              <span className="font-medium text-slate-800">{solicitud.fechaDesde || 'N/A'}</span>
+              <span className="block text-xs font-semibold text-slate-500 uppercase">Desde (Fecha)</span>
+              <span className="font-medium text-slate-800">{solicitud.fechaInicio || 'N/A'}</span>
             </div>
             <div>
-              <span className="block text-xs font-semibold text-slate-500 uppercase">Hasta</span>
-              <span className="font-medium text-slate-800">{solicitud.fechaHasta || 'N/A'}</span>
+              <span className="block text-xs font-semibold text-slate-500 uppercase">Hasta (Fecha)</span>
+              <span className="font-medium text-slate-800">{solicitud.fechaFin || solicitud.fechaInicio || 'N/A'}</span>
             </div>
           </div>
 
-          {/* Bloque exclusivo para Horas de Salida y Llegada (Si aplica) */}
-          {solicitud.tipoTiempo === 'Horas' && (
-            <div className="grid grid-cols-3 gap-4 text-sm bg-blue-50/70 p-4 rounded-lg border border-blue-200 shadow-sm">
-              <div>
-                <span className="block text-xs font-semibold text-blue-800 uppercase">Cantidad Horas</span>
-                <span className="font-bold text-blue-900">{solicitud.dias} hrs</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-blue-800 uppercase">Hora Salida</span>
-                <span className="font-bold text-slate-900">{solicitud.horaSalida || 'N/A'} hrs</span>
-              </div>
-              <div>
-                <span className="block text-xs font-semibold text-blue-800 uppercase">Hora Llegada</span>
-                <span className="font-bold text-slate-900">{solicitud.horaLlegada || 'N/A'} hrs</span>
-              </div>
+          {/* Bloque detallado para Horas (Salida, Llegada y Total) */}
+          <div className="grid grid-cols-3 gap-4 text-sm bg-blue-50/80 p-4 rounded-lg border border-blue-200 shadow-sm">
+            <div>
+              <span className="block text-xs font-semibold text-blue-800 uppercase">Hora Salida</span>
+              <span className="font-bold text-blue-900">{solicitud.horaSalida || 'No registrada'}</span>
             </div>
-          )}
-
-          {/* Observaciones */}
-          <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm text-sm">
-            <span className="block text-xs font-semibold text-slate-500 uppercase mb-1">Observaciones</span>
-            <p className="text-slate-700 min-h-[40px]">{solicitud.observaciones || 'Sin observaciones registradas.'}</p>
+            <div>
+              <span className="block text-xs font-semibold text-blue-800 uppercase">Hora Regreso</span>
+              <span className="font-bold text-blue-900">{solicitud.horaRegreso || solicitud.horaLlegada || 'No registrada'}</span>
+            </div>
+            <div>
+              <span className="block text-xs font-semibold text-blue-800 uppercase">Duración Total</span>
+              <span className="font-extrabold text-blue-900">{solicitud.cantidadHoras} hrs</span>
+            </div>
           </div>
 
           {/* Estado actual */}

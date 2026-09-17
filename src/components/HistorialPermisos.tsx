@@ -15,24 +15,54 @@ export const HistorialPermisos: React.FC<Props> = ({
   onVerComprobante,
 }) => {
   const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<string>('TODOS');
+  const [filtroMotivo, setFiltroMotivo] = useState<string>('TODOS');
 
-  // Filtrar solicitudes por folio, nombre o rut
-  const solicitudesFiltradas = solicitudes.filter(
-    (sol) =>
+  // Obtener una lista única de motivos existentes en las solicitudes para el filtro
+  const motivosDisponibles = Array.from(
+    new Set(solicitudes.map((sol) => sol.motivo.split(' - ')[0]))
+  ).filter(Boolean);
+
+  // Filtrar solicitudes combinando la búsqueda general y los filtros por columna
+  const solicitudesFiltradas = solicitudes.filter((sol) => {
+    const coincideTexto =
       sol.id.toLowerCase().includes(busqueda.toLowerCase()) ||
       sol.nombreTrabajador.toLowerCase().includes(busqueda.toLowerCase()) ||
-      sol.rut.toLowerCase().includes(busqueda.toLowerCase())
-  );
+      sol.rut.toLowerCase().includes(busqueda.toLowerCase());
 
-  // Calcular total de horas acumuladas de las solicitudes aprobadas
+    const coincideEstado = filtroEstado === 'TODOS' || sol.estado === filtroEstado;
+    const coincideMotivo = filtroMotivo === 'TODOS' || sol.motivo.toLowerCase().includes(filtroMotivo.toLowerCase());
+
+    return coincideTexto && coincideEstado && coincideMotivo;
+  });
+
+  // Calcular total de horas acumuladas (Horas y Días convertidos a 8.5 hrs)
   const totalHorasAprobadas = solicitudes
     .filter((sol) => sol.estado === 'Aprobado')
-    .reduce((acc, sol) => acc + (Number(sol.cantidadHoras) || 0), 0);
+    .reduce((acc, sol) => {
+      const texto = sol.cantidadHoras.toLowerCase();
+      
+      if (texto.includes('días') || texto.includes('dia') || texto.includes('día')) {
+        const diasNum = parseFloat(texto.replace(/[^0-9,.]/g, '').replace(',', '.')) || 0;
+        return acc + (diasNum * 8.5);
+      } else if (texto.includes('hrs')) {
+        const horasNum = parseFloat(texto.replace(/[^0-9,.]/g, '').replace(',', '.')) || 0;
+        return acc + horasNum;
+      }
+      
+      return acc;
+    }, 0);
+
+  const handleEliminarClick = (id: string) => {
+    if (window.confirm(`¿Estás seguro de que deseas eliminar la solicitud #${id}?`)) {
+      onEliminar(id);
+    }
+  };
 
   return (
     <div className="bg-white p-6 rounded-xl shadow-md space-y-6 border border-slate-200">
       
-      {/* Encabezado y Buscador */}
+      {/* Encabezado y Buscador General */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b pb-4">
         <div>
           <h2 className="text-xl font-bold text-slate-800">Historial e Informes de Permisos</h2>
@@ -50,6 +80,39 @@ export const HistorialPermisos: React.FC<Props> = ({
         </div>
       </div>
 
+      {/* Barra de Filtros por Columna */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Filtrar por Estado</label>
+          <select
+            value={filtroEstado}
+            onChange={(e) => setFiltroEstado(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="TODOS">Todos los estados</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Aprobado">Aprobado</option>
+            <option value="Rechazado">Rechazado</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Filtrar por Motivo</label>
+          <select
+            value={filtroMotivo}
+            onChange={(e) => setFiltroMotivo(e.target.value)}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="TODOS">Todos los motivos</option>
+            {motivosDisponibles.map((motivo, index) => (
+              <option key={index} value={motivo}>
+                {motivo}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Tarjetas de Resumen */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
@@ -57,7 +120,7 @@ export const HistorialPermisos: React.FC<Props> = ({
           <div className="text-3xl font-extrabold text-slate-800">{solicitudes.length}</div>
         </div>
         <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-200 space-y-1">
-          <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Total Horas Acumuladas (Aprobados)</span>
+          <span className="text-xs font-semibold text-emerald-800 uppercase tracking-wider">Total Horas Acumuladas (Incluye Días a 8.5h)</span>
           <div className="text-3xl font-extrabold text-emerald-700">{totalHorasAprobadas.toFixed(1)} hrs</div>
         </div>
       </div>
@@ -79,7 +142,7 @@ export const HistorialPermisos: React.FC<Props> = ({
             {solicitudesFiltradas.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-6 py-8 text-center text-sm text-slate-500">
-                  {solicitudes.length === 0 ? 'No hay solicitudes registradas todavía.' : 'No se encontraron coincidencias con la búsqueda.'}
+                  {solicitudes.length === 0 ? 'No hay solicitudes registradas todavía.' : 'No se encontraron coincidencias con los filtros aplicados.'}
                 </td>
               </tr>
             ) : (
@@ -110,7 +173,7 @@ export const HistorialPermisos: React.FC<Props> = ({
 
                   {/* Duración */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-slate-800">
-                    {sol.cantidadHoras} hrs
+                    {sol.cantidadHoras}
                   </td>
 
                   {/* Estado y Acciones */}
@@ -161,7 +224,7 @@ export const HistorialPermisos: React.FC<Props> = ({
 
                       <button
                         type="button"
-                        onClick={() => onEliminar(sol.id)}
+                        onClick={() => handleEliminarClick(sol.id)}
                         className="px-2.5 py-1 bg-red-50 text-red-600 hover:bg-red-100 rounded text-xs font-medium transition cursor-pointer"
                         title="Eliminar solicitud"
                       >

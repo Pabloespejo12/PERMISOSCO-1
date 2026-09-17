@@ -11,7 +11,10 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
   const [rut, setRut] = useState('');
   const [motivo, setMotivo] = useState('Particulares');
   const [tipoPermiso, setTipoPermiso] = useState<'Por Horas' | 'Por Dias'>('Por Horas');
-  const [cantidadHoras, setCantidadHoras] = useState('0,5');
+  
+  const [cantidadHoras, setCantidadHoras] = useState('2');
+  const [cantidadDias, setCantidadDias] = useState('1');
+
   const [horaSalida, setHoraSalida] = useState('');
   const [horaRegreso, setHoraRegreso] = useState('');
   const [fechaInicio, setFechaInicio] = useState('');
@@ -19,7 +22,7 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
   const [jefeSeccion, setJefeSeccion] = useState('');
   const [observaciones, setObservaciones] = useState('');
 
-  // Efecto "BUSCARV" para autocompletar el RUT al seleccionar el nombre de la nómina
+  // Efecto "BUSCARV" para autocompletar el RUT
   useEffect(() => {
     if (!nombreTrabajador) {
       setRut('');
@@ -40,13 +43,82 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
       return;
     }
 
+    const fInicio = fechaInicio || new Date().toISOString().split('T')[0];
+    const fFin = fechaFin || fInicio;
+    const esPorDias = tipoPermiso === 'Por Dias';
+
+    if (esPorDias) {
+      // VALIDACIÓN PARA DÍAS
+      const inicioMs = new Date(fInicio).getTime();
+      const finMs = new Date(fFin).getTime();
+
+      if (finMs < inicioMs) {
+        alert('Error: La fecha "Hasta" no puede ser anterior a la fecha "Desde".');
+        return;
+      }
+
+      const diferenciaDias = Math.round((finMs - inicioMs) / (1000 * 60 * 60 * 24)) + 1;
+      
+      if (Number(cantidadDias) !== diferenciaDias) {
+        const confirmar = window.confirm(
+          `La cantidad de días ingresada (${cantidadDias}) no coincide con el rango de fechas seleccionado (${diferenciaDias} días).\n¿Desea ajustar la solicitud a ${diferenciaDias} día(s)?`
+        );
+        if (confirmar) {
+          setCantidadDias(diferenciaDias.toString());
+        } else {
+          return;
+        }
+      }
+    } else {
+      // VALIDACIÓN ESTRICTA PARA HORAS
+      if (!horaSalida || !horaRegreso) {
+        alert('Por favor ingrese tanto la hora de salida como la hora de regreso.');
+        return;
+      }
+
+      // Convertir horas a minutos para calcular la diferencia exacta
+      const [hSalida, mSalida] = horaSalida.split(':').map(Number);
+      const [hRegreso, mRegreso] = horaRegreso.split(':').map(Number);
+      
+      const totalMinutosSalida = hSalida * 60 + mSalida;
+      const totalMinutosRegreso = hRegreso * 60 + mRegreso;
+      const diferenciaMinutos = totalMinutosRegreso - totalMinutosSalida;
+
+      if (diferenciaMinutos <= 0) {
+        alert('Error: La hora de regreso debe ser estrictamente posterior a la hora de salida.');
+        return;
+      }
+
+      const horasCalculadas = Number((diferenciaMinutos / 60).toFixed(1));
+      const horasIngresadas = Number(cantidadHoras.replace(',', '.'));
+
+      // Verificar si hay discrepancia entre el horario ingresado y las horas declaradas
+      if (Math.abs(horasIngresadas - horasCalculadas) > 0.1) {
+        const confirmar = window.confirm(
+          `La cantidad de horas ingresada (${horasIngresadas} hrs) no coincide con el intervalo de tiempo entre las ${horaSalida} y las ${horaRegreso} (${horasCalculadas} hrs).\n¿Desea ajustar la duración a ${horasCalculadas} hrs?`
+        );
+        if (confirmar) {
+          setCantidadHoras(horasCalculadas.toString().replace('.', ','));
+        } else {
+          return;
+        }
+      }
+    }
+
+    const totalCalculado = esPorDias 
+      ? `${cantidadDias} día(s)` 
+      : `${cantidadHoras.replace('.', ',')} hrs`;
+
     onAgregarSolicitud({
       nombreTrabajador: nombreTrabajador.toUpperCase(),
       rut,
       cargo: jefeSeccion,
-      tipoPermiso: tipoPermiso === 'Por Horas' ? 'Administrativo' : 'Otro',
-      fechaInicio: fechaInicio || new Date().toISOString().split('T')[0],
-      cantidadHoras: Number(cantidadHoras.replace(',', '.')) || 8.5,
+      tipoPermiso: esPorDias ? 'Administrativo (Días)' : 'Administrativo (Horas)',
+      fechaInicio: fInicio,
+      fechaFin: fFin,
+      cantidadHoras: totalCalculado,
+      horaSalida: esPorDias ? '' : horaSalida,
+      horaRegreso: esPorDias ? '' : horaRegreso,
       motivo: `${motivo} - ${observaciones}`.trim(),
       estado: 'Pendiente'
     });
@@ -54,6 +126,8 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
     // Limpiar formulario
     setNombreTrabajador('');
     setRut('');
+    setHoraSalida('');
+    setHoraRegreso('');
     setObservaciones('');
     alert('¡Solicitud enviada con éxito!');
   };
@@ -131,40 +205,57 @@ export const FormularioPermiso: React.FC<Props> = ({ onAgregarSolicitud, nominaP
         </div>
       </div>
 
-      {/* SECCIÓN 3: TIEMPOS Y HORARIOS */}
+      {/* SECCIÓN 3: DURACIÓN Y HORARIOS */}
       <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
-        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider">3. Tiempos y Horarios</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Cantidad (Horas)</label>
-            <input
-              type="text"
-              value={cantidadHoras}
-              onChange={(e) => setCantidadHoras(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+        <h3 className="text-sm font-semibold text-blue-900 uppercase tracking-wider">3. Duración y Horarios</h3>
+        
+        {tipoPermiso === 'Por Horas' ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Cantidad (Horas)</label>
+              <input
+                type="text"
+                value={cantidadHoras}
+                onChange={(e) => setCantidadHoras(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Hora de Salida</label>
+              <input
+                type="time"
+                value={horaSalida}
+                onChange={(e) => setHoraSalida(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Hora de Regreso</label>
+              <input
+                type="time"
+                value={horaRegreso}
+                onChange={(e) => setHoraRegreso(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Hora de Salida</label>
-            <input
-              type="time"
-              value={horaSalida}
-              onChange={(e) => setHoraSalida(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Cantidad de Días</label>
+              <input
+                type="number"
+                min="1"
+                value={cantidadDias}
+                onChange={(e) => setCantidadDias(e.target.value)}
+                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex items-center text-sm text-slate-500 italic pt-6">
+              * El sistema validará la correspondencia con las fechas seleccionadas.
+            </div>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Hora de Regreso / Llegada</label>
-            <input
-              type="time"
-              value={horaRegreso}
-              onChange={(e) => setHoraRegreso(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-        </div>
+        )}
       </div>
 
       {/* SECCIÓN 4: FECHAS Y OBSERVACIONES */}
