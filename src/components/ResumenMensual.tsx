@@ -11,16 +11,31 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
   );
   const [busquedaFuncionario, setBusquedaFuncionario] = useState<string>('');
 
-  // Función matemática inteligente: 1 día de trabajo = 8.5 horas
+  // Función matemática inteligente mejorada para leer cantidadHoras y calcular 8.5h por día
   const calcularHorasPermiso = (p: any): number => {
-    if (p.totalHoras || p.horas) {
-      return Number(p.totalHoras || p.horas) || 0;
+    // 1. Revisar si viene en el campo principal 'cantidadHoras' (ej. "2 hrs", "1 día(s)")
+    const textoCantidad = (p.cantidadHoras || p.totalHoras || p.horas || '').toString().toLowerCase();
+
+    if (textoCantidad) {
+      if (textoCantidad.includes('días') || textoCantidad.includes('dia') || textoCantidad.includes('día')) {
+        const diasNum = parseFloat(textoCantidad.replace(/[^0-9,.]/g, '').replace(',', '.')) || 0;
+        return diasNum * 8.5;
+      } else if (textoCantidad.includes('hrs') || texto.includes('hr')) {
+        const horasNum = parseFloat(textoCantidad.replace(/[^0-9,.]/g, '').replace(',', '.')) || 0;
+        return horasNum;
+      } else {
+        // Si es un número plano guardado como string o número
+        const numPlano = parseFloat(textoCantidad.replace(',', '.')) || 0;
+        if (numPlano > 0) return numPlano;
+      }
     }
 
+    // 2. Compatibilidad con estructuras basadas en días numéricos directos
     if (p.tipoTiempo === 'Dias' && p.dias) {
       return Number(p.dias) * 8.5;
     }
 
+    // 3. Compatibilidad con horas de salida y llegada si aplica
     if (p.horaSalida && p.horaLlegada) {
       try {
         const [hSalida, mSalida] = p.horaSalida.split(':').map(Number);
@@ -126,8 +141,9 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
         </div>
         <div className="bg-white p-4 rounded-xl shadow-sm border border-[#E6E0D5]">
           <p className="text-sm font-medium text-[#795548]">Funcionario con más horas</p>
-          <p className="text-lg font-bold text-[#2C241D] mt-1 truncate" title={funcionarioConMasHoras ? funcionarioConMasHoras.nombre : 'Ninguno'}>
-            {funcionarioConMasHoras ? `${funcionarioConMasHoras.nombre} (${funcionarioConMasHoras.totalHoras}h)` : 'N/A'}
+          {/* Se cambió text-lg por text-sm (o text-xs si el nombre es extremadamente largo) para que calce perfecto */}
+          <p className="text-sm font-bold text-[#2C241D] mt-1 break-words leading-tight" title={funcionarioConMasHoras ? funcionarioConMasHoras.nombre : 'Ninguno'}>
+            {funcionarioConMasHoras ? `${funcionarioConMasHoras.nombre} (${funcionarioConMasHoras.totalHoras.toFixed(1)}h)` : 'N/A'}
           </p>
         </div>
       </div>
@@ -158,7 +174,7 @@ export const ResumenMensual: React.FC<Props> = ({ permisos }) => {
 
         <button
           onClick={exportarAExcel}
-          className="w-full md:w-auto bg-[#6B8E23] hover:bg-[#556B2F] text-white font-semibold px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center justify-center gap-2"
+          className="w-full md:w-auto bg-[#6B8E23] hover:bg-[#556B2F] text-white font-semibold px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center justify-center gap-2 cursor-pointer"
         >
           📊 Exportar a Excel (CSV)
         </button>
