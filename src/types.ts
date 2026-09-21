@@ -24,3 +24,13 @@ export interface TrabajadorNomina {
   rut: string;
   cargo: string;
 }
+
+export type RolUsuario = 'superadmin' | 'admin' | 'digitador' | 'visualizador';
+
+export interface Usuario {
+  id: string;
+  nombre: string;
+  email: string;
+  password?: string; // Agregamos la contraseña
+  rol: RolUsuario;
+}
