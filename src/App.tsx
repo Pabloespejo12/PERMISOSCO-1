@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import type { SolicitudPermiso, EstadoPermiso, TrabajadorNomina, Usuario, RolUsuario } from './types';
 import { db } from './firebase';
 import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
