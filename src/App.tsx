@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { SolicitudPermiso, EstadoPermiso, TrabajadorNomina, Usuario, RolUsuario } from './types';
+import { db } from './firebase';
+import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot } from 'firebase/firestore';
+
 import { FormularioPermiso } from './components/FormularioPermiso';
 import { HistorialPermisos } from './components/HistorialPermisos';
 import { ComprobantePermiso } from './components/ComprobantePermiso';
@@ -9,46 +12,71 @@ import { GestionUsuarios } from './components/GestionUsuarios';
 import { Login } from './components/Login';
 
 export function App() {
-  // Estado para el usuario autenticado actual (null significa que no ha iniciado sesión)
+  // Estado para el usuario autenticado actual (persiste en localStorage)
   const [usuarioLogueado, setUsuarioLogueado] = useState<Usuario | null>(() => {
     const saved = localStorage.getItem('sindicato_sesion_activa');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Inicialización con persistencia en localStorage para usuarios del sistema (con contraseña)
-  const [usuarios, setUsuarios] = useState<Usuario[]>(() => {
-    const saved = localStorage.getItem('sindicato_usuarios');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-    return [
-      { id: '1', nombre: 'Super Administrador', email: 'super@sindicato.cl', password: '1234', rol: 'superadmin' },
-      { id: '2', nombre: 'Administrador General', email: 'admin@sindicato.cl', password: '1234', rol: 'admin' },
-      { id: '3', nombre: 'Digitador Turno', email: 'digitador@sindicato.cl', password: '1234', rol: 'digitador' },
-      { id: '4', nombre: 'Visualizador Consulta', email: 'visor@sindicato.cl', password: '1234', rol: 'visualizador' },
-    ];
-  });
-
-  // Solicitudes y Nómina
-  const [solicitudes, setSolicitudes] = useState<SolicitudPermiso[]>(() => {
-    const saved = localStorage.getItem('sindicato_solicitudes');
-    return saved ? JSON.parse(saved) : [];
-  });
-
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [solicitudes, setSolicitudes] = useState<SolicitudPermiso[]>([]);
+  const [nomina, setNomina] = useState<TrabajadorNomina[]>([]);
+  
   const [solicitudSeleccionada, setSolicitudSeleccionada] = useState<SolicitudPermiso | null>(null);
-  
-  const [nomina, setNomina] = useState<TrabajadorNomina[]>(() => {
-    const saved = localStorage.getItem('sindicato_nomina');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', nombre: 'IVAN SOTO', rut: '1245789-9', cargo: '' },
-      { id: '2', nombre: 'PAMELA DIAZ', rut: '44545412-2', cargo: '' },
-      { id: '3', nombre: 'PABLO ESPEJO C', rut: '12575300-0', cargo: '' },
-    ];
-  });
-  
   const [vistaActiva, setVistaActiva] = useState<'gestion' | 'resumen' | 'nomina' | 'usuarios'>('gestion');
 
-  // Guardar sesión y datos en localStorage
+  // Sincronización en tiempo real con Firebase Firestore
+  useEffect(() => {
+    // 1. Escuchar Usuarios en tiempo real
+    const unsubUsuarios = onSnapshot(collection(db, 'usuarios'), (snapshot) => {
+      const listaUsuarios: Usuario[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Usuario));
+      if (listaUsuarios.length === 0) {
+        // Sembrar datos iniciales si la colección está vacía
+        const iniciales: Omit<Usuario, 'id'>[] = [
+          { nombre: 'Super Administrador', email: 'super@sindicato.cl', password: '1234', rol: 'superadmin' },
+          { nombre: 'Administrador General', email: 'admin@sindicato.cl', password: '1234', rol: 'admin' },
+          { nombre: 'Digitador Turno', email: 'digitador@sindicato.cl', password: '1234', rol: 'digitador' },
+          { nombre: 'Visualizador Consulta', email: 'visor@sindicato.cl', password: '1234', rol: 'visualizador' },
+        ];
+        iniciales.forEach(async (u) => {
+          await setDoc(doc(collection(db, 'usuarios')), u);
+        });
+      } else {
+        setUsuarios(listaUsuarios);
+      }
+    });
+
+    // 2. Escuchar Solicitudes en tiempo real
+    const unsubSolicitudes = onSnapshot(collection(db, 'solicitudes'), (snapshot) => {
+      const listaSolicitudes: SolicitudPermiso[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as SolicitudPermiso));
+      setSolicitudes(listaSolicitudes);
+    });
+
+    // 3. Escuchar Nómina en tiempo real
+    const unsubNomina = onSnapshot(collection(db, 'nomina'), (snapshot) => {
+      const listaNomina: TrabajadorNomina[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as TrabajadorNomina));
+      if (listaNomina.length === 0) {
+        const nominaInicial: Omit<TrabajadorNomina, 'id'>[] = [
+          { nombre: 'IVAN SOTO', rut: '1245789-9', cargo: '' },
+          { nombre: 'PAMELA DIAZ', rut: '44545412-2', cargo: '' },
+          { nombre: 'PABLO ESPEJO C', rut: '12575300-0', cargo: '' },
+        ];
+        nominaInicial.forEach(async (t) => {
+          await setDoc(doc(collection(db, 'nomina')), t);
+        });
+      } else {
+        setNomina(listaNomina);
+      }
+    });
+
+    return () => {
+      unsubUsuarios();
+      unsubSolicitudes();
+      unsubNomina();
+    };
+  }, []);
+
+  // Guardar sesión activa localmente
   useEffect(() => {
     if (usuarioLogueado) {
       localStorage.setItem('sindicato_sesion_activa', JSON.stringify(usuarioLogueado));
@@ -57,57 +85,60 @@ export function App() {
     }
   }, [usuarioLogueado]);
 
-  useEffect(() => {
-    localStorage.setItem('sindicato_solicitudes', JSON.stringify(solicitudes));
-  }, [solicitudes]);
-
-  useEffect(() => {
-    localStorage.setItem('sindicato_nomina', JSON.stringify(nomina));
-  }, [nomina]);
-
-  useEffect(() => {
-    localStorage.setItem('sindicato_usuarios', JSON.stringify(usuarios));
-  }, [usuarios]);
-
-  // Si NO hay usuario logueado, mostramos exclusivamente la pantalla de Login con contraseña
   if (!usuarioLogueado) {
     return <Login usuarios={usuarios} onIniciarSesion={setUsuarioLogueado} />;
   }
 
-  // Obtener el rol actual del usuario logueado para las restricciones
   const rolUsuario = usuarioLogueado.rol;
 
   const cerrarSesion = () => {
     setUsuarioLogueado(null);
   };
 
-  // Funciones de negocio (validación basada en el rolUsuario)
-  const agregarSolicitud = (nueva: Omit<SolicitudPermiso, 'id'>) => {
+  // Funciones de negocio conectadas a Firebase Cloud Firestore
+  const agregarSolicitud = async (nueva: Omit<SolicitudPermiso, 'id'>) => {
     if (rolUsuario === 'visualizador') {
       alert('⚠️ Los visualizadores no tienen permisos para crear solicitudes.');
       return;
     }
-    const siguienteFolio = String(solicitudes.length + 1).padStart(3, '0');
-    setSolicitudes([{ ...nueva, id: siguienteFolio }, ...solicitudes]);
+    try {
+      const nuevoId = String(solicitudes.length + 1).padStart(3, '0');
+      await setDoc(doc(db, 'solicitudes', nuevoId), { ...nueva, id: nuevoId });
+      alert('¡Solicitud creada y guardada en la nube con éxito!');
+    } catch (error) {
+      console.error("Error al agregar solicitud:", error);
+      alert('Hubo un error al guardar en Firebase.');
+    }
   };
 
-  const cambiarEstado = (id: string, nuevoEstado: EstadoPermiso) => {
+  const cambiarEstado = async (id: string, nuevoEstado: EstadoPermiso) => {
     if (rolUsuario === 'visualizador' || rolUsuario === 'digitador') {
       alert('⚠️ Tu rol actual no tiene permisos para cambiar el estado de las solicitudes.');
       return;
     }
-    setSolicitudes(solicitudes.map((sol) => (sol.id === id ? { ...sol, estado: nuevoEstado } : sol)));
+    try {
+      const docRef = doc(db, 'solicitudes', id);
+      await updateDoc(docRef, { estado: nuevoEstado });
+    } catch (error) {
+      console.error("Error al cambiar estado:", error);
+    }
   };
 
-  const eliminarSolicitud = (id: string) => {
+  const eliminarSolicitud = async (id: string) => {
     if (rolUsuario !== 'admin' && rolUsuario !== 'superadmin') {
       alert('⚠️ Solo los administradores pueden eliminar registros.');
       return;
     }
-    setSolicitudes(solicitudes.filter((sol) => sol.id !== id));
+    if (window.confirm('¿Estás seguro de eliminar este registro?')) {
+      try {
+        await deleteDoc(doc(db, 'solicitudes', id));
+      } catch (error) {
+        console.error("Error al eliminar:", error);
+      }
+    }
   };
 
-  const agregarTrabajadorNomina = (nuevo: Omit<TrabajadorNomina, 'id'>) => {
+  const agregarTrabajadorNomina = async (nuevo: Omit<TrabajadorNomina, 'id'>) => {
     if (rolUsuario === 'visualizador') {
       alert('⚠️ Los visualizadores no pueden modificar la nómina.');
       return;
@@ -117,72 +148,100 @@ export function App() {
       alert(`⚠️ El trabajador con RUT ${nuevo.rut} ya se encuentra registrado.`);
       return;
     }
-    setNomina([...nomina, { ...nuevo, id: Date.now().toString() }]);
-    alert('¡Trabajador agregado con éxito!');
+    try {
+      const idUnico = Date.now().toString();
+      await setDoc(doc(db, 'nomina', idUnico), { ...nuevo, id: idUnico });
+      alert('¡Trabajador agregado a Firebase con éxito!');
+    } catch (error) {
+      console.error("Error al agregar trabajador:", error);
+    }
   };
 
-  const eliminarTrabajadorNomina = (id: string) => {
+  const eliminarTrabajadorNomina = async (id: string) => {
     if (rolUsuario !== 'admin' && rolUsuario !== 'superadmin') {
       alert('⚠️ Solo los administradores pueden eliminar trabajadores.');
       return;
     }
-    setNomina(nomina.filter((t) => t.id !== id));
+    try {
+      await deleteDoc(doc(db, 'nomina', id));
+    } catch (error) {
+      console.error("Error al eliminar trabajador:", error);
+    }
   };
 
-  const agregarNominaMasiva = (nuevosTrabajadores: Omit<TrabajadorNomina, 'id'>[]) => {
+  const agregarNominaMasiva = async (nuevosTrabajadores: Omit<TrabajadorNomina, 'id'>[]) => {
     if (rolUsuario === 'visualizador') return;
     let duplicadosCount = 0;
-    const listaActualizada = [...nomina];
 
-    nuevosTrabajadores.forEach((nuevo, index) => {
+    for (const [index, nuevo] of nuevosTrabajadores.entries()) {
       const rutLimpio = nuevo.rut.trim().toUpperCase();
-      if (!listaActualizada.some(t => t.rut.trim().toUpperCase() === rutLimpio)) {
-        listaActualizada.push({ ...nuevo, id: `${Date.now()}-${index}` });
+      if (!nomina.some(t => t.rut.trim().toUpperCase() === rutLimpio)) {
+        const idUnico = `${Date.now()}-${index}`;
+        await setDoc(doc(db, 'nomina', idUnico), { ...nuevo, id: idUnico });
       } else {
         duplicadosCount++;
       }
-    });
-    setNomina(listaActualizada);
-    alert(`Carga masiva completada. Se omitieron ${duplicadosCount} duplicados.`);
+    }
+    alert(`Carga masiva completada en la nube. Se omitieron ${duplicadosCount} duplicados.`);
   };
 
-  const agregarUsuario = (nuevo: Omit<Usuario, 'id'>) => {
-    if (rolUsuario !== 'superadmin' && rolUsuario !== 'admin') return;
+  // 🔒 RESTRICCIÓN: Solo el 'superadmin' puede crear usuarios
+  const agregarUsuario = async (nuevo: Omit<Usuario, 'id'>) => {
+    if (rolUsuario !== 'superadmin') {
+      alert('⚠️ Solo el SuperAdministrador tiene permisos para crear nuevos usuarios.');
+      return;
+    }
     
-    // Validar si el correo ya existe
     if (usuarios.some(u => u.email.trim().toLowerCase() === nuevo.email.trim().toLowerCase())) {
       alert('⚠️ Ya existe un usuario registrado con ese correo electrónico.');
       return;
     }
 
-    setUsuarios([...usuarios, { ...nuevo, id: Date.now().toString() }]);
-    alert('¡Usuario creado con éxito!');
+    try {
+      const idUnico = Date.now().toString();
+      await setDoc(doc(db, 'usuarios', idUnico), { ...nuevo, id: idUnico });
+      alert('¡Usuario creado en Firebase con éxito!');
+    } catch (error) {
+      console.error("Error al crear usuario:", error);
+    }
   };
 
-  const cambiarRolUsuario = (id: string, nuevoRol: RolUsuario) => {
+  const cambiarRolUsuario = async (id: string, nuevoRol: RolUsuario) => {
     if (rolUsuario !== 'superadmin') {
       alert('⚠️ Solo el SuperAdmin puede modificar los roles.');
       return;
     }
-    setUsuarios(usuarios.map(u => u.id === id ? { ...u, rol: nuevoRol } : u));
+    try {
+      await updateDoc(doc(db, 'usuarios', id), { rol: nuevoRol });
+    } catch (error) {
+      console.error("Error al cambiar rol:", error);
+    }
   };
 
-  // Nueva función para cambiar la contraseña de un usuario
-  const cambiarPasswordUsuario = (id: string, nuevaPassword: string) => {
-    if (rolUsuario !== 'superadmin' && rolUsuario !== 'admin') {
-      alert('⚠️ No tienes permisos para cambiar contraseñas.');
+  // 🔒 RESTRICCIÓN: Solo el 'superadmin' puede cambiar contraseñas
+  const cambiarPasswordUsuario = async (id: string, nuevaPassword: string) => {
+    if (rolUsuario !== 'superadmin') {
+      alert('⚠️ Solo el SuperAdmin tiene permisos para cambiar contraseñas de usuarios.');
       return;
     }
-    setUsuarios(usuarios.map(u => u.id === id ? { ...u, password: nuevaPassword } : u));
-    alert('¡Contraseña actualizada con éxito!');
+    try {
+      await updateDoc(doc(db, 'usuarios', id), { password: nuevaPassword });
+      alert('¡Contraseña actualizada en Firebase con éxito!');
+    } catch (error) {
+      console.error("Error al cambiar contraseña:", error);
+    }
   };
 
-  const eliminarUsuario = (id: string) => {
+  const eliminarUsuario = async (id: string) => {
     if (rolUsuario !== 'superadmin') {
       alert('⚠️ Solo el SuperAdmin puede eliminar usuarios.');
       return;
     }
-    setUsuarios(usuarios.filter(u => u.id !== id));
+    try {
+      await deleteDoc(doc(db, 'usuarios', id));
+    } catch (error) {
+      console.error("Error al eliminar usuario:", error);
+    }
   };
 
   return (
@@ -193,7 +252,7 @@ export function App() {
           {/* Barra de Sesión Activa */}
           <div className="bg-white p-3 rounded-xl shadow-md border border-[#E6E0D5] flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm">
-              <span className="font-semibold text-[#5C4033]">Sesión Iniciada:</span>
+              <span className="font-semibold text-[#5C4033]">Sesión Iniciada (Cloud):</span>
               <span className="text-[#8B5A2B] font-bold">{usuarioLogueado.nombre}</span>
               <span className="bg-[#EBE5D8] text-[#5C4033] text-xs px-2 py-0.5 rounded-full uppercase font-semibold">
                 {usuarioLogueado.rol}
@@ -243,7 +302,9 @@ export function App() {
                 👥 Gestión de Nómina
               </button>
             )}
-            {(rolUsuario === 'admin' || rolUsuario === 'superadmin') && (
+            
+            {/* 🔒 RESTRICCIÓN DE VISIBILIDAD: Solo el 'superadmin' verá la pestaña de usuarios */}
+            {rolUsuario === 'superadmin' && (
               <button
                 onClick={() => setVistaActiva('usuarios')}
                 className={`px-4 sm:px-6 py-2 rounded-lg font-semibold text-sm transition ${
@@ -281,7 +342,7 @@ export function App() {
               onEliminarTrabajador={eliminarTrabajadorNomina}
               onCargaMasiva={agregarNominaMasiva}
             />
-          ) : (
+          ) : rolUsuario === 'superadmin' ? (
             <GestionUsuarios
               usuarios={usuarios}
               onAgregarUsuario={agregarUsuario}
@@ -289,7 +350,7 @@ export function App() {
               onCambiarPasswordUsuario={cambiarPasswordUsuario}
               onEliminarUsuario={eliminarUsuario}
             />
-          )}
+          ) : null}
         </main>
 
         {solicitudSeleccionada && (
